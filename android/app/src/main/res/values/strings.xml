@@ -1,0 +1,31 @@
+<resources>
+    <string name="app_name">TeamAccess Remote</string>
+    <string name="tab_host">Allow Control</string>
+    <string name="tab_client">Control Partner</string>
+
+    <string name="my_device_id_label">Your Device ID</string>
+    <string name="session_pin_label">One-Time Session PIN</string>
+    <string name="status_ready">Status: Ready to connect</string>
+    <string name="status_connected">Status: Active session connected</string>
+    <string name="status_connecting">Connecting to signaling server…</string>
+
+    <string name="start_screen_share">Start Remote Sharing</string>
+    <string name="stop_screen_share">Stop Session</string>
+
+    <string name="partner_id_hint">Enter Partner 9-digit ID (e.g. 123-456-789)</string>
+    <string name="partner_pin_hint">Enter 4-digit PIN</string>
+    <string name="btn_connect_partner">Connect to Partner</string>
+
+    <string name="accessibility_permission_title">Accessibility Permission Required</string>
+    <string name="accessibility_permission_desc">To allow remote clicks and gestures from your partner device, TeamAccess needs Accessibility Service enabled.</string>
+    <string name="btn_enable_accessibility">Open Accessibility Settings</string>
+
+    <!-- Play Store Mandatory Prominent Disclosure -->
+    <string name="prominent_disclosure_title">Privacy &amp; Security Disclosure</string>
+    <string name="prominent_disclosure_body">TeamAccess Remote requires two special permissions to provide remote desktop support:\n\n1. AccessibilityService API: Used solely to dispatch touch clicks, swipes, and gestures sent by your connected remote partner during an active session.\n\n2. MediaProjection API: Used to capture and stream your screen in real-time to your authorized partner.\n\nWe do NOT collect, store, or sell any personal data, keystrokes, passwords, or personal files. You can disconnect at any time from the notification bar.</string>
+    <string name="disclosure_accept">I Understand &amp; Agree</string>
+    <string name="disclosure_cancel">Decline &amp; Exit</string>
+
+    <!-- Accessibility Service Description for Android Settings -->
+    <string name="accessibility_service_description">Enables TeamAccess Remote to process remote clicks, swipes, and gestures from authorized devices with end-to-end encryption.</string>
+</resources>
