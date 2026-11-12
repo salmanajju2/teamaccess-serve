@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TeamAccess Remote - Control Center</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
+        body { background: #060d1a; color: #f1f5f9; min-height: 100vh; display: flex; flex-direction: column; }
+
+        /* ── NAVBAR ── */
+        .navbar {
+            background: #0a1628;
+            border-bottom: 1px solid #1a2744;
+            padding: 14px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky; top: 0; z-index: 100;
+        }
+        .brand { font-size: 20px; font-weight: 800; color: #38bdf8; display: flex; align-items: center; gap: 10px; letter-spacing: -0.5px; }
+        .server-badge {
+            display: flex; align-items: center; gap: 8px;
+            font-size: 12px; font-weight: 700;
+            padding: 6px 14px; border-radius: 50px;
+            background: rgba(16,185,129,0.12);
+            color: #34d399;
+            border: 1px solid rgba(16,185,129,0.25);
+            transition: 0.3s;
+        }
+        .server-badge.offline { background: rgba(239,68,68,0.12); color: #f87171; border-color: rgba(239,68,68,0.3); }
+        .dot { width: 7px; height: 7px; border-radius: 50%; background: #10b981; animation: pulse 1.4s infinite; }
+        .dot.red { background: #ef4444; }
+        @keyframes pulse { 0%,100%{opacity:.4;transform:scale(0.9)} 50%{opacity:1;transform:scale(1.1)} }
+
+        /* ── LAYOUT ── */
+        .container { flex: 1; max-width: 1300px; width: 100%; margin: 0 auto; padding: 20px 24px; }
+
+        /* ── SECTION HEADER ── */
+        .sec-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+        .sec-title { font-size: 16px; font-weight: 700; color: #cbd5e1; display: flex; align-items: center; gap: 8px; }
+        .count-pill { font-size: 12px; padding: 3px 10px; border-radius: 50px; background: #0f1e38; color: #38bdf8; border: 1px solid #1e3a5f; }
+        .btn-sm { background: #0f1e38; border: 1px solid #1e3a5f; color: #94a3b8; padding: 6px 14px; border-radius: 8px; font-size: 12px; cursor: pointer; transition: 0.2s; white-space: nowrap; }
+        .btn-sm:hover { background: #1e3a5f; color: #fff; }
+
+        /* ── DEVICE GRID ── */
+        .devices-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; margin-bottom: 24px; }
+
+        .device-card {
+            background: #0d1f38;
+            border: 1px solid #1a3056;
+            border-radius: 16px;
+            padding: 18px;
+            display: flex; flex-direction: column; gap: 12px;
+            transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+            position: relative; overflow: hidden;
+            cursor: default;
+        }
+        .device-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; background: linear-gradient(90deg,#38bdf8,#818cf8); }
+        .device-card:hover { transform: translateY(-2px); border-color: #38bdf8; box-shadow: 0 8px 28px rgba(56,189,248,0.12); }
+
+        .device-top { display: flex; align-items: center; gap: 12px; }
+        .device-icon { width: 44px; height: 44px; background: #071224; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 22px; border: 1px solid #1a3056; flex-shrink: 0; }
+        .device-name { font-size: 15px; font-weight: 700; color: #fff; margin-bottom: 3px; }
+        .device-id { font-size: 11px; font-family: monospace; color: #38bdf8; background: #071224; padding: 2px 7px; border-radius: 5px; display: inline-block; }
+
+        .status-row { display: flex; align-items: center; justify-content: space-between; }
+        .status-badge { font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 5px; }
+        .status-badge.online { color: #34d399; }
+        .status-badge.busy { color: #f59e0b; }
+        .status-badge.disconnected { color: #ef4444; }
+
+        /* ── CONNECT BUTTON ── */
+        .btn-connect {
+            background: linear-gradient(135deg, #0ea5e9, #2563eb);
+            color: #fff; border: none; padding: 11px 16px;
+            border-radius: 10px; font-size: 14px; font-weight: 700;
+            cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 7px;
+            transition: 0.2s; letter-spacing: 0.3px;
+        }
+        .btn-connect:hover { background: linear-gradient(135deg, #38bdf8, #3b82f6); transform: scale(1.01); }
+        .btn-connect:active { transform: scale(0.98); }
+
+        /* ── MONITORING BUTTONS ── */
+        .monitor-row { display: flex; gap: 8px; }
+        .btn-monitor {
+            flex: 1; background: #071224; border: 1px solid #1a3056; color: #94a3b8;
+            padding: 8px 10px; border-radius: 8px; font-size: 12px; font-weight: 600;
+            cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px;
+            transition: 0.2s;
+        }
+        .btn-monitor:hover { background: #0d1f38; border-color: #38bdf8; color: #38bdf8; }
+        .btn-monitor.active { background: rgba(16,185,129,0.15); border-color: #10b981; color: #34d399; }
+        .btn-monitor.active:hover { background: rgba(239,68,68,0.15); border-color: #ef4444; color: #f87171; }
+
+        /* ── EMPTY STATE ── */
+        .empty-state { text-align: center; padding: 60px 20px; background: #0d1f38; border: 2px dashed #1a3056; border-radius: 20px; display: none; }
+        .empty-icon { font-size: 50px; margin-bottom: 14px; opacity: 0.7; }
+        .empty-title { font-size: 18px; font-weight: 700; color: #cbd5e1; margin-bottom: 8px; }
+        .empty-sub { font-size: 13px; color: #475569; max-width: 400px; margin: 0 auto; line-height: 1.6; }
+
+        /* ── VIEWER PANEL ── */
+        #viewerContainer { display: none; background: #071224; border: 1px solid #1a3056; border-radius: 20px; overflow: hidden; margin-bottom: 24px; box-shadow: 0 20px 50px rgba(0,0,0,0.6); }
+
+        .viewer-header { background: #0d1f38; padding: 12px 18px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1a3056; }
+        .viewer-title { font-size: 14px; font-weight: 700; color: #38bdf8; display: flex; align-items: center; gap: 8px; }
+        .viewer-info { display: flex; align-items: center; gap: 10px; }
+
+        .viewer-screen-box {
+            background: #000;
+            position: relative;
+            display: flex; justify-content: center; align-items: center;
+            min-height: 500px; max-height: 72vh;
+            user-select: none;
+        }
+        video#remoteVideo {
+            max-width: 100%; max-height: 72vh;
+            object-fit: contain; cursor: crosshair;
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: crisp-edges;
+            transform: translateZ(0);
+            will-change: transform;
+            display: block;
+        }
+
+        /* connection overlay */
+        #connectingOverlay {
+            position: absolute; inset: 0;
+            background: rgba(6,13,26,0.9);
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            gap: 16px; z-index: 10;
+        }
+        .spinner { width: 44px; height: 44px; border: 3px solid #1a3056; border-top-color: #38bdf8; border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .connecting-txt { color: #94a3b8; font-size: 14px; font-weight: 600; }
+
+        /* ── VIEWER CONTROLS ── */
+        .viewer-controls { background: #0d1f38; padding: 10px 16px; display: flex; justify-content: center; gap: 8px; border-top: 1px solid #1a3056; flex-wrap: wrap; }
+        .ctrl-btn { background: #071224; border: 1px solid #1a3056; color: #e2e8f0; padding: 8px 16px; border-radius: 9px; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 5px; transition: 0.15s; user-select: none; }
+        .ctrl-btn:hover { background: #1a3056; color: #fff; }
+        .ctrl-btn:active { transform: scale(0.95); }
+        .ctrl-btn.danger { background: #7f1d1d; border-color: #ef4444; color: #fca5a5; }
+        .ctrl-btn.danger:hover { background: #dc2626; color: #fff; }
+        .ctrl-btn.green { background: rgba(16,185,129,0.15); border-color: #10b981; color: #34d399; }
+        .ctrl-btn.green:hover { background: rgba(16,185,129,0.3); }
+
+        /* ── MIC PANEL ── */
+        #micPanel {
+            background: #0d1f38; border: 1px solid #1a3056; border-radius: 16px;
+            padding: 16px 20px; margin-bottom: 16px;
+        }
+        .mic-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .mic-title { font-size: 14px; font-weight: 700; color: #e2e8f0; display: flex; align-items: center; gap: 8px; }
+        #micViz { display: flex; gap: 3px; align-items: flex-end; height: 36px; }
+        .mic-bar { width: 5px; background: #34d399; border-radius: 3px; min-height: 4px; transition: height 0.08s; }
+        #micStatus { font-size: 12px; color: #64748b; }
+        .mic-transcript { font-size: 13px; color: #94a3b8; min-height: 36px; padding: 8px 12px; background: #071224; border-radius: 10px; border: 1px solid #1a3056; margin-top: 10px; }
+
+        /* ── LOCATION PANEL ── */
+        #locationPanel {
+            background: #0d1f38; border: 1px solid #1a3056; border-radius: 16px;
+            padding: 16px 20px; margin-bottom: 16px;
+        }
+        .loc-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .loc-title { font-size: 14px; font-weight: 700; color: #e2e8f0; display: flex; align-items: center; gap: 8px; }
+        #locationInfo { font-size: 13px; color: #94a3b8; display: flex; flex-direction: column; gap: 6px; }
+        .loc-row { display: flex; align-items: center; gap: 8px; }
+        .loc-label { font-size: 11px; color: #475569; width: 70px; }
+        .loc-val { color: #38bdf8; font-family: monospace; }
+        #mapLink { color: #34d399; text-decoration: none; font-size: 12px; font-weight: 600; }
+        #mapLink:hover { text-decoration: underline; }
+
+        /* ── STATUS PILL ── */
+        .s-pill { font-size: 11px; padding: 3px 10px; border-radius: 6px; background: #071224; color: #64748b; font-family: monospace; border: 1px solid #1a3056; }
+        .s-pill.live { background: rgba(16,185,129,0.12); color: #34d399; border-color: rgba(16,185,129,0.3); }
+
+        /* ── INFO BANNER ── */
+        .info-banner { background: rgba(56,189,248,0.07); border: 1px solid rgba(56,189,248,0.2); border-radius: 12px; padding: 10px 16px; margin-bottom: 20px; font-size: 12px; color: #93c5fd; display: flex; align-items: center; gap: 10px; }
+
+        @media (max-width: 600px) {
+            .viewer-controls { gap: 5px; }
+            .ctrl-btn { padding: 7px 10px; font-size: 12px; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- NAVBAR -->
+<div class="navbar">
+    <div class="brand">⚡ TeamAccess Remote</div>
+    <div class="server-badge" id="serverBadge">
+        <div class="dot" id="connDot"></div>
+        <span id="connTxt">Connecting...</span>
+    </div>
+</div>
+
+<div class="container">
+
+    <div class="info-banner">
+        💡 <span><strong>Tip:</strong> Open this dashboard on a PC or another phone to control your Android device. Opening it on the same phone causes a mirror-loop effect.</span>
+    </div>
+
+    <!-- ── VIEWER (shown when connected) ── -->
+    <div id="viewerContainer">
+        <div class="viewer-header">
+            <div class="viewer-title">
+                🔴 Live Session: <span id="currentDeviceLabel" style="color:#fff;margin-left:6px;">Android</span>
+            </div>
+            <div class="viewer-info">
+                <span class="s-pill" id="sessionStatus">Connecting…</span>
+                <button class="ctrl-btn danger" style="padding:5px 12px;font-size:12px;" onclick="disconnectSession()">✕ Close</button>
+            </div>
+        </div>
+
+        <div class="viewer-screen-box">
+            <div id="connectingOverlay">
+                <div class="spinner"></div>
+                <div class="connecting-txt" id="connectingMsg">Setting up connection…</div>
+            </div>
+            <video id="remoteVideo" autoplay playsinline></video>
+        </div>
+
+        <div class="viewer-controls">
+            <button class="ctrl-btn" onclick="sendNav('back')">◀ Back</button>
+            <button class="ctrl-btn" onclick="sendNav('home')">⭕ Home</button>
+            <button class="ctrl-btn" onclick="sendNav('recents')">📑 Recents</button>
+            <button class="ctrl-btn" id="btnFullscreen" onclick="toggleFullscreen()">⛶ Fullscreen</button>
+            <button class="ctrl-btn danger" onclick="disconnectSession()">⏹ End Session</button>
+        </div>
+    </div>
+
+    <!-- ── MIC PANEL (hidden until toggled) ── -->
+    <div id="micPanel" style="display:none;">
+        <div class="mic-header">
+            <div class="mic-title">🎙️ Microphone Monitor</div>
+            <div style="display:flex;align-items:center;gap:10px;">
+                <span id="micStatus">Ready</span>
+                <button class="btn-sm" onclick="stopMic()">Stop Mic</button>
+            </div>
+        </div>
+        <div id="micViz">
+            <div class="mic-bar" id="mb0"></div>
+            <div class="mic-bar" id="mb1"></div>
+            <div class="mic-bar" id="mb2"></div>
+            <div class="mic-bar" id="mb3"></div>
+            <div class="mic-bar" id="mb4"></div>
+            <div class="mic-bar" id="mb5"></div>
+            <div class="mic-bar" id="mb6"></div>
+            <div class="mic-bar" id="mb7"></div>
+            <div class="mic-bar" id="mb8"></div>
+            <div class="mic-bar" id="mb9"></div>
+        </div>
+        <div class="mic-transcript" id="micTranscript">Listening for audio…</div>
+    </div>
+
+    <!-- ── LOCATION PANEL (hidden until toggled) ── -->
+    <div id="locationPanel" style="display:none;">
+        <div class="loc-header">
+            <div class="loc-title">📍 Device Location</div>
+            <button class="btn-sm" onclick="stopLocation()">Stop</button>
+        </div>
+        <div id="locationInfo">
+            <div class="loc-row"><span class="loc-label">Status</span><span class="loc-val" id="locStatus">Fetching…</span></div>
+            <div class="loc-row"><span class="loc-label">Latitude</span><span class="loc-val" id="locLat">—</span></div>
+            <div class="loc-row"><span class="loc-label">Longitude</span><span class="loc-val" id="locLng">—</span></div>
+            <div class="loc-row"><span class="loc-label">Accuracy</span><span class="loc-val" id="locAcc">—</span></div>
+            <div class="loc-row"><span class="loc-label">Address</span><span class="loc-val" id="locAddr">—</span></div>
+            <div class="loc-row"><span class="loc-label">Map</span><a id="mapLink" target="_blank" style="display:none;">📍 Open in Google Maps</a></div>
+        </div>
+    </div>
+
+    <!-- ── DEVICE LIST ── -->
+    <div class="sec-header">
+        <div class="sec-title">📱 Online Devices <span class="count-pill" id="deviceCount">0 online</span></div>
+        <button class="btn-sm" onclick="refreshDevices()">🔄 Refresh</button>
+    </div>
+
+    <div id="devicesList" class="devices-grid"></div>
+    <div id="emptyState" class="empty-state">
+        <div class="empty-icon">📡</div>
+        <div class="empty-title">No devices online</div>
+        <div class="empty-sub">Open the <strong>TeamAccess Remote</strong> app on your Android phone. It will appear here automatically within seconds.</div>
+    </div>
+
+</div><!-- /container -->
+
+<script>
+// ═══════════════════════════════════════
+//  CONFIG
+// ═══════════════════════════════════════
+const WS_URL = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
+
+const ICE_SERVERS = {
+    iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' },
+        { urls: 'stun:stun3.l.google.com:19302' },
+        { urls: 'stun:stun4.l.google.com:19302' },
+        { urls: 'stun:stun.cloudflare.com:3478' }
+    ]
+};
+
+// ═══════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════
+let ws = null;
+let pc = null;
+let dc = null;
+let currentTargetId = null;
+let currentTargetName = '';
+let isRemoteDescSet = false;
+let pendingCandidates = [];
+let deviceMap = {};         // id → device object
+let activeDeviceId = null;  // which device the viewer is for
+
+// Mic state
+let micStream = null;
+let micContext = null;
+let micAnalyser = null;
+let micAnimFrame = null;
+
+// Location state
+let locationWatchId = null;
+
+// ═══════════════════════════════════════
+//  WEBSOCKET
+// ═══════════════════════════════════════
+function connectWS() {
+    ws = new WebSocket(WS_URL);
+    ws.binaryType = 'arraybuffer';
+
+    ws.onopen = () => {
+        setBadge(true);
+        ws.send(JSON.stringify({ type: 'get_devices' }));
+    };
+
+    ws.onmessage = async (ev) => {
+        try {
+            const d = JSON.parse(ev.data);
+            switch (d.type) {
+                case 'devices_list': renderDevices(d.devices || []); break;
+                case 'connect_accepted': await startWebRTC(); break;
+                case 'connect_error': onConnectError(d.message); break;
+                case 'answer': await onAnswer(d.sdp); break;
+                case 'ice_candidate': await onRemoteIce(d.candidate); break;
+                case 'session_ended': onSessionEnded(d.message); break;
+                case 'mic_data': onMicData(d); break;
+                case 'location_data': onLocationData(d); break;
+            }
+        } catch(e) { console.error('WS msg error:', e); }
+    };
+
+    ws.onclose = () => {
+        setBadge(false);
+        setTimeout(connectWS, 3000);
+    };
+
+    ws.onerror = () => {};
+}
+
+function wsSend(obj) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify(obj));
+    }
+}
+
+function setBadge(online) {
+    const badge = document.getElementById('serverBadge');
+    const dot = document.getElementById('connDot');
+    const txt = document.getElementById('connTxt');
+    if (online) {
+        badge.className = 'server-badge';
+        dot.className = 'dot';
+        txt.textContent = 'Cloud Server Connected';
+    } else {
+        badge.className = 'server-badge offline';
+        dot.className = 'dot red';
+        txt.textContent = 'Reconnecting…';
+    }
+}
+
+// ═══════════════════════════════════════
+//  DEVICE RENDERING
+// ═══════════════════════════════════════
+function refreshDevices() { wsSend({ type: 'get_devices' }); }
+
+function renderDevices(devices) {
+    deviceMap = {};
+    devices.forEach(d => deviceMap[d.id] = d);
+
+    const grid = document.getElementById('devicesList');
+    const empty = document.getElementById('emptyState');
+    const count = document.getElementById('deviceCount');
+
+    count.textContent = devices.length + ' online';
+
+    if (devices.length === 0) {
+        grid.innerHTML = '';
+        empty.style.display = 'block';
+        return;
+    }
+    empty.style.display = 'none';
+
+    // Always rebuild grid so active-session buttons survive
+    grid.innerHTML = devices.map(d => {
+        const isActive = d.id === activeDeviceId;
+        const statusClass = d.status === 'busy' ? 'busy' : 'online';
+        const statusText = d.status === 'busy' ? '● In Session' : '● Online & Ready';
+        const micActive = d.micOn;
+        const locActive = d.locOn;
+
+        return `
+        <div class="device-card" id="card_${esc(d.id)}">
+            <div class="device-top">
+                <div class="device-icon">📱</div>
+                <div>
+                    <div class="device-name">${esc(d.name || 'Android Device')}</div>
+                    <div class="device-id">${esc(d.id)}</div>
+                </div>
+            </div>
+            <div class="status-row">
+                <span class="status-badge ${statusClass}">${statusText}</span>
+            </div>
+            ${isActive ? `
+            <button class="btn-connect" style="background:linear-gradient(135deg,#059669,#047857);" onclick="viewDevice('${esc(d.id)}','${esc(d.name)}')">
+                🟢 Resume View
+            </button>` : `
+            <button class="btn-connect" onclick="connectToDevice('${esc(d.id)}','${esc(d.name)}')">
+                ⚡ 1-Click Connect
+            </button>`}
+            <div class="monitor-row">
+                <button class="btn-monitor ${micActive?'active':''}" id="micBtn_${esc(d.id)}" onclick="toggleMic('${esc(d.id)}')">
+                    🎙️ ${micActive ? 'Listening…' : 'Mic Listen'}
+                </button>
+                <button class="btn-monitor ${locActive?'active':''}" id="locBtn_${esc(d.id)}" onclick="toggleLocation('${esc(d.id)}')">
+                    📍 ${locActive ? 'Tracking…' : 'Location'}
+                </button>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function esc(s) {
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// ═══════════════════════════════════════
+//  CONNECT FLOW
+// ═══════════════════════════════════════
+function connectToDevice(id, name) {
+    currentTargetId = id;
+    currentTargetName = name || id;
+    activeDeviceId = id;
+
+    document.getElementById('currentDeviceLabel').textContent = currentTargetName;
+    setStatus('Connecting…');
+    showViewer(true);
+
+    wsSend({ type: 'connect_request', targetId: id, pin: '' });
+}
+
+function viewDevice(id, name) {
+    // If viewer is closed, reconnect; else just scroll to it
+    if (pc && (pc.connectionState === 'connected' || pc.connectionState === 'connecting')) {
+        document.getElementById('viewerContainer').scrollIntoView({ behavior: 'smooth' });
+    } else {
+        connectToDevice(id, name);
+    }
+}
+
+function showViewer(connecting) {
+    const vc = document.getElementById('viewerContainer');
+    vc.style.display = 'block';
+    vc.scrollIntoView({ behavior: 'smooth' });
+    document.getElementById('connectingOverlay').style.display = connecting ? 'flex' : 'none';
+}
+
+function onConnectError(msg) {
+    setStatus('Error: ' + (msg || 'unknown'));
+    document.getElementById('connectingMsg').textContent = '❌ ' + (msg || 'Connection failed');
+    activeDeviceId = null;
+    refreshDevices();
+}
+
+function onSessionEnded(msg) {
+    setStatus(msg || 'Session ended');
+    activeDeviceId = null;
+    refreshDevices();
+}
+
+function setStatus(txt) {
+    const el = document.getElementById('sessionStatus');
+    el.textContent = txt;
+    el.className = 's-pill' + (txt.includes('Live') || txt.includes('Active') ? ' live' : '');
+}
+
+// ═══════════════════════════════════════
+//  WEBRTC
+// ═══════════════════════════════════════
+async function startWebRTC() {
+    isRemoteDescSet = false;
+    pendingCandidates = [];
+
+    if (pc) { try { pc.close(); } catch(e){} }
+
+    pc = new RTCPeerConnection(ICE_SERVERS);
+
+    // ── video track
+    pc.ontrack = (e) => {
+        const vid = document.getElementById('remoteVideo');
+        vid.srcObject = e.streams[0];
+        vid.onloadedmetadata = () => {
+            document.getElementById('connectingOverlay').style.display = 'none';
+            setStatus('Live Stream Active ✓');
+        };
+    };
+
+    // ── ICE candidates
+    pc.onicecandidate = (e) => {
+        if (e.candidate) {
+            wsSend({ type: 'ice_candidate', candidate: {
+                sdpMid: e.candidate.sdpMid,
+                sdpMLineIndex: e.candidate.sdpMLineIndex,
+                sdp: e.candidate.candidate
+            }});
+        }
+    };
+
+    pc.onconnectionstatechange = () => {
+        const s = pc.connectionState;
+        if (s === 'connected') {
+            document.getElementById('connectingOverlay').style.display = 'none';
+            setStatus('Live Stream Active ✓');
+        } else if (s === 'failed' || s === 'disconnected') {
+            setStatus('Connection lost. Reconnecting…');
+            document.getElementById('connectingMsg').textContent = 'Reconnecting…';
+            document.getElementById('connectingOverlay').style.display = 'flex';
+        }
+    };
+
+    // ── DataChannel for touch input
+    dc = pc.createDataChannel('input', { ordered: true });
+    dc.onopen = () => console.log('DataChannel open — touch active');
+
+    // ── Receive video only
+    pc.addTransceiver('video', { direction: 'recvonly' });
+
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    document.getElementById('connectingMsg').textContent = 'Negotiating… (this takes ~5s)';
+    setStatus('Negotiating…');
+
+    wsSend({ type: 'offer', sdp: offer.sdp });
+}
+
+async function onAnswer(sdp) {
+    if (!pc) return;
+    try {
+        await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp }));
+        isRemoteDescSet = true;
+        for (const c of pendingCandidates) {
+            try { await pc.addIceCandidate(c); } catch(e){}
+        }
+        pendingCandidates = [];
+    } catch(e) { console.error('setRemoteDescription error:', e); }
+}
+
+async function onRemoteIce(candidate) {
+    if (!candidate || !candidate.sdp) return;
+    const c = new RTCIceCandidate({ candidate: candidate.sdp, sdpMid: candidate.sdpMid, sdpMLineIndex: candidate.sdpMLineIndex });
+    if (pc && isRemoteDescSet) {
+        try { await pc.addIceCandidate(c); } catch(e){}
+    } else {
+        pendingCandidates.push(c);
+    }
+}
+
+// ═══════════════════════════════════════
+//  TOUCH CONTROL
+// ═══════════════════════════════════════
+function getCoords(e, videoEl) {
+    const r = videoEl.getBoundingClientRect();
+    const vw = videoEl.videoWidth || 720, vh = videoEl.videoHeight || 1280;
+    const er = r.width / r.height, vr = vw / vh;
+    let aw, ah, lx, ty;
+    if (er > vr) { ah = r.height; aw = r.height * vr; lx = (r.width - aw)/2; ty = 0; }
+    else { aw = r.width; ah = r.width / vr; lx = 0; ty = (r.height - ah)/2; }
+    const cx = e.clientX ?? (e.touches?.[0]?.clientX ?? 0);
+    const cy = e.clientY ?? (e.touches?.[0]?.clientY ?? 0);
+    return {
+        x: Math.max(0, Math.min(1, (cx - r.left - lx) / aw)),
+        y: Math.max(0, Math.min(1, (cy - r.top  - ty) / ah))
+    };
+}
+
+function sendTouch(action, x, y, extra=0) {
+    if (!dc || dc.readyState !== 'open') return;
+    const buf = new ArrayBuffer(16);
+    const v = new DataView(buf);
+    v.setUint8(0, action);
+    v.setUint8(1, 0);
+    v.setFloat32(2, x, true);
+    v.setFloat32(6, y, true);
+    v.setInt32(10, extra, true);
+    v.setUint16(14, 0, true);
+    dc.send(buf);
+}
+
+const vid = document.getElementById('remoteVideo');
+let mouseDown = false;
+
+vid.addEventListener('mousedown', e => { mouseDown=true; const {x,y}=getCoords(e,vid); sendTouch(0,x,y); });
+window.addEventListener('mousemove', e => { if(!mouseDown)return; const {x,y}=getCoords(e,vid); sendTouch(2,x,y); });
+window.addEventListener('mouseup',   e => { if(!mouseDown)return; mouseDown=false; const {x,y}=getCoords(e,vid); sendTouch(1,x,y); });
+
+vid.addEventListener('touchstart', e => { e.preventDefault(); const {x,y}=getCoords(e,vid); sendTouch(0,x,y); }, {passive:false});
+vid.addEventListener('touchmove',  e => { e.preventDefault(); const {x,y}=getCoords(e,vid); sendTouch(2,x,y); }, {passive:false});
+vid.addEventListener('touchend',   e => { e.preventDefault(); const {x,y}=getCoords(e,vid); sendTouch(1,x,y); }, {passive:false});
+
+// ── Scroll = swipe gesture on Android
+vid.addEventListener('wheel', e => {
+    e.preventDefault();
+    const {x,y}=getCoords(e,vid);
+    const dy = e.deltaY > 0 ? 0.15 : -0.15;
+    sendTouch(0, x, y);
+    setTimeout(()=>sendTouch(2, x, Math.max(0,Math.min(1,y+dy))), 30);
+    setTimeout(()=>sendTouch(1, x, Math.max(0,Math.min(1,y+dy))), 100);
+}, {passive:false});
+
+function sendNav(type) {
+    const map = { back:[1,4], home:[2,3], recents:[3,187] };
+    const [k1,k2] = map[type] || [0,0];
+    sendTouch(4,0,0,k1);
+    setTimeout(()=>sendTouch(4,0,0,k2), 30);
+}
+
+// ═══════════════════════════════════════
+//  DISCONNECT / FULLSCREEN
+// ═══════════════════════════════════════
+function disconnectSession() {
+    wsSend({ type: 'disconnect_session' });
+    resetViewer();
+    activeDeviceId = null;
+    refreshDevices();
+}
+
+function resetViewer() {
+    if (pc) { try{pc.close();}catch(e){} pc=null; }
+    dc = null;
+    document.getElementById('remoteVideo').srcObject = null;
+    document.getElementById('viewerContainer').style.display = 'none';
+    document.getElementById('connectingOverlay').style.display = 'flex';
+}
+
+function toggleFullscreen() {
+    const vc = document.getElementById('viewerContainer');
+    if (!document.fullscreenElement) vc.requestFullscreen();
+    else document.exitFullscreen();
+}
+
+document.addEventListener('fullscreenchange', () => {
+    document.getElementById('btnFullscreen').textContent = document.fullscreenElement ? '⤡ Exit Fullscreen' : '⛶ Fullscreen';
+});
+
+// ═══════════════════════════════════════
+//  MIC MONITORING (Browser-side)
+// ═══════════════════════════════════════
+async function toggleMic(deviceId) {
+    if (micStream) { stopMic(); return; }
+
+    document.getElementById('micPanel').style.display = 'block';
+    document.getElementById('micPanel').scrollIntoView({ behavior:'smooth' });
+    document.getElementById('micStatus').textContent = 'Requesting microphone…';
+
+    try {
+        micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        micContext = new (window.AudioContext || window.webkitAudioContext)();
+        const source = micContext.createMediaStreamSource(micStream);
+        micAnalyser = micContext.createAnalyser();
+        micAnalyser.fftSize = 64;
+        source.connect(micAnalyser);
+
+        document.getElementById('micStatus').textContent = '🔴 Live — monitoring audio';
+        const btn = document.getElementById('micBtn_' + deviceId);
+        if (btn) { btn.classList.add('active'); btn.textContent = '🎙️ Listening…'; }
+
+        animateMic();
+    } catch(err) {
+        document.getElementById('micStatus').textContent = '❌ Mic permission denied';
+        document.getElementById('micPanel').style.display = 'none';
+    }
+}
+
+function animateMic() {
+    if (!micAnalyser) return;
+    const data = new Uint8Array(micAnalyser.frequencyBinCount);
+    micAnalyser.getByteFrequencyData(data);
+    for (let i = 0; i < 10; i++) {
+        const bar = document.getElementById('mb' + i);
+        if (bar) {
+            const h = Math.max(4, (data[i*2] / 255) * 36);
+            bar.style.height = h + 'px';
+            const g = Math.round(80 + (data[i*2]/255)*120);
+            bar.style.background = `rgb(0,${g},100)`;
+        }
+    }
+    micAnimFrame = requestAnimationFrame(animateMic);
+}
+
+function stopMic() {
+    if (micAnimFrame) cancelAnimationFrame(micAnimFrame);
+    if (micStream) { micStream.getTracks().forEach(t=>t.stop()); micStream = null; }
+    if (micContext) { micContext.close(); micContext = null; }
+    micAnalyser = null;
+    document.getElementById('micPanel').style.display = 'none';
+    document.querySelectorAll('[id^="micBtn_"]').forEach(b => {
+        b.classList.remove('active'); b.textContent = '🎙️ Mic Listen';
+    });
+}
+
+function onMicData(d) {
+    // If Android sends back mic data via signaling (future feature)
+    document.getElementById('micTranscript').textContent = d.text || '…';
+}
+
+// ═══════════════════════════════════════
+//  LOCATION
+// ═══════════════════════════════════════
+function toggleLocation(deviceId) {
+    if (locationWatchId !== null) { stopLocation(); return; }
+
+    document.getElementById('locationPanel').style.display = 'block';
+    document.getElementById('locationPanel').scrollIntoView({ behavior:'smooth' });
+    document.getElementById('locStatus').textContent = 'Requesting…';
+
+    const btn = document.getElementById('locBtn_' + deviceId);
+
+    if (!navigator.geolocation) {
+        document.getElementById('locStatus').textContent = '❌ Geolocation not supported';
+        return;
+    }
+
+    locationWatchId = navigator.geolocation.watchPosition(
+        pos => {
+            const lat = pos.coords.latitude.toFixed(6);
+            const lng = pos.coords.longitude.toFixed(6);
+            const acc = Math.round(pos.coords.accuracy) + 'm';
+
+            document.getElementById('locStatus').textContent = '🟢 Live tracking';
+            document.getElementById('locLat').textContent = lat;
+            document.getElementById('locLng').textContent = lng;
+            document.getElementById('locAcc').textContent = acc;
+
+            const mapUrl = `https://www.google.com/maps?q=${lat},${lng}`;
+            const mapLink = document.getElementById('mapLink');
+            mapLink.href = mapUrl;
+            mapLink.style.display = 'inline';
+            mapLink.textContent = `📍 Open in Google Maps (${lat}, ${lng})`;
+
+            // Reverse geocode via public API
+            fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`)
+                .then(r=>r.json())
+                .then(d => { document.getElementById('locAddr').textContent = d.display_name || '—'; })
+                .catch(() => { document.getElementById('locAddr').textContent = 'Address unavailable'; });
+
+            if (btn) { btn.classList.add('active'); btn.textContent = '📍 Tracking…'; }
+
+            // Also send location to Android via signaling (for display on phone)
+            wsSend({ type: 'location_update', deviceId, lat, lng, acc });
+        },
+        err => {
+            document.getElementById('locStatus').textContent = '❌ ' + err.message;
+        },
+        { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 }
+    );
+}
+
+function stopLocation() {
+    if (locationWatchId !== null) {
+        navigator.geolocation.clearWatch(locationWatchId);
+        locationWatchId = null;
+    }
+    document.getElementById('locationPanel').style.display = 'none';
+    document.querySelectorAll('[id^="locBtn_"]').forEach(b => {
+        b.classList.remove('active'); b.textContent = '📍 Location';
+    });
+}
+
+function onLocationData(d) {
+    // Handle location sent back from Android (future)
+    document.getElementById('locLat').textContent = d.lat || '—';
+    document.getElementById('locLng').textContent = d.lng || '—';
+}
+
+// ═══════════════════════════════════════
+//  AUTO-REFRESH every 4s
+// ═══════════════════════════════════════
+setInterval(refreshDevices, 4000);
+connectWS();
+</script>
+</body>
+</html>

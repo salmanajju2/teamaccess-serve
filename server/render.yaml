@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: teamaccess-signaling-rust
+    env: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: free
+    region: oregon
+    envVars:
+      - key: PORT
+        value: 9090
