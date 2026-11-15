@@ -94,14 +94,9 @@ async fn root_handler(
 }
 
 async fn index_handler() -> impl IntoResponse {
-    match tokio::fs::read_to_string("public/index.html").await {
-        Ok(content) => Html(content).into_response(),
-        Err(_) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Error loading dashboard: public/index.html not found",
-        )
-            .into_response(),
-    }
+    // HTML is embedded at compile time — no file system dependency on Render
+    const DASHBOARD: &str = include_str!("../public/index.html");
+    Html(DASHBOARD).into_response()
 }
 
 async fn status_handler(State(peers): State<PeerMap>) -> Json<StatusResponse> {
