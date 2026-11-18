@@ -45,6 +45,7 @@ class SignalingClient(
         fun onOfferReceived(sdp: String) {}
         fun onAnswerReceived(sdp: String) {}
         fun onIceCandidateReceived(candidate: IceCandidateData) {}
+        fun onLocationRequested() {}
         fun onSessionEnded(reason: String) {}
         fun onError(err: String) {}
     }
@@ -108,6 +109,7 @@ class SignalingClient(
                                     "offer" -> msg.sdp?.let { cb.onOfferReceived(it) }
                                     "answer" -> msg.sdp?.let { cb.onAnswerReceived(it) }
                                     "ice_candidate" -> msg.candidate?.let { cb.onIceCandidateReceived(it) }
+                                    "location_update", "location_request" -> cb.onLocationRequested()
                                     "session_ended" -> cb.onSessionEnded(msg.message ?: "Session ended")
                                 }
                             }

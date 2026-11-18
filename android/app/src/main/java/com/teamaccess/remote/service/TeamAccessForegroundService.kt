@@ -55,7 +55,12 @@ class TeamAccessForegroundService : Service() {
 
         fun refreshLocation(context: Context) {
             val svc = instance
-            if (svc != null) svc.startLocationTracking() else start(context)
+            if (svc != null) svc.sendBestLocationNow() else start(context)
+        }
+
+        fun sendCurrentLocationNow(context: Context) {
+            val svc = instance
+            if (svc != null) svc.sendBestLocationNow() else start(context)
         }
     }
 
@@ -128,32 +133,69 @@ class TeamAccessForegroundService : Service() {
 
             locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
 
-            val provider = when {
-                locationManager!!.isProviderEnabled(LocationManager.GPS_PROVIDER) -> LocationManager.GPS_PROVIDER
-                locationManager!!.isProviderEnabled(LocationManager.NETWORK_PROVIDER) -> LocationManager.NETWORK_PROVIDER
-                else -> null
+            val providers = listOf(
+                LocationManager.NETWORK_PROVIDER,
+                LocationManager.GPS_PROVIDER,
+                LocationManager.PASSIVE_PROVIDER
+            ).filter {
+                try { locationManager?.isProviderEnabled(it) == true } catch (e: Exception) { false }
             }
 
-            if (provider == null) {
-                Log.w(TAG, "No location provider available")
-                return
+            var bestLocation: Location? = null
+            for (p in providers) {
+                try {
+                    locationManager?.requestLocationUpdates(
+                        p, 15_000L, 5f, locationListener, mainHandler.looper
+                    )
+                    val last = locationManager?.getLastKnownLocation(p)
+                    if (last != null && (bestLocation == null || last.accuracy < bestLocation.accuracy)) {
+                        bestLocation = last
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "requestLocationUpdates failed for $p: ${e.message}")
+                }
             }
 
-            // Request updates every 30 seconds or 10 meter movement
-            locationManager!!.requestLocationUpdates(
-                provider, 30_000L, 10f, locationListener, mainHandler.looper
-            )
-
-            // Send last known location immediately
-            val lastKnown = locationManager!!.getLastKnownLocation(provider)
-            if (lastKnown != null) {
-                sendLocationToServer(lastKnown)
+            if (bestLocation != null) {
+                sendLocationToServer(bestLocation)
             }
 
             locationStarted = true
-            Log.i(TAG, "✅ Location tracking started via $provider")
+            Log.i(TAG, "✅ Location tracking active on ${providers.joinToString()}")
         } catch (e: Exception) {
             Log.e(TAG, "Location tracking error: ${e.message}")
+        }
+    }
+
+    fun sendBestLocationNow() {
+        try {
+            val hasFineLoc = ContextCompat.checkSelfPermission(
+                this, Manifest.permission.ACCESS_FINE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED
+            val hasCoarseLoc = ContextCompat.checkSelfPermission(
+                this, Manifest.permission.ACCESS_COARSE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED
+            if (!hasFineLoc && !hasCoarseLoc) return
+
+            val lm = locationManager ?: (getSystemService(Context.LOCATION_SERVICE) as LocationManager).also { locationManager = it }
+            val providers = listOf(
+                LocationManager.NETWORK_PROVIDER,
+                LocationManager.GPS_PROVIDER,
+                LocationManager.PASSIVE_PROVIDER
+            ).filter { try { lm.isProviderEnabled(it) } catch (e: Exception) { false } }
+
+            var best: Location? = null
+            for (p in providers) {
+                val l = try { lm.getLastKnownLocation(p) } catch (e: Exception) { null }
+                if (l != null && (best == null || l.accuracy < best.accuracy)) {
+                    best = l
+                }
+            }
+            if (best != null) {
+                sendLocationToServer(best)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "sendBestLocationNow error: ${e.message}")
         }
     }
 

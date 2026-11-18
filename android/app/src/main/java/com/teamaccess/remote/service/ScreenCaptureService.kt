@@ -190,7 +190,21 @@ class ScreenCaptureService : Service(), WebRtcClient.WebRtcListener {
             .build()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
+            var type = ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                val micGranted = ContextCompat.checkSelfPermission(
+                    this, android.Manifest.permission.RECORD_AUDIO
+                ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                if (micGranted) {
+                    type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+                }
+            }
+            try {
+                startForeground(NOTIFICATION_ID, notification, type)
+            } catch (e: Exception) {
+                Log.w(TAG, "startForeground with types failed, fallback: ${e.message}")
+                startForeground(NOTIFICATION_ID, notification)
+            }
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }

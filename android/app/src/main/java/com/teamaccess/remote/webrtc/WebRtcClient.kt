@@ -47,14 +47,15 @@ class WebRtcClient(
         val stun = listOf(
             "stun:stun.l.google.com:19302",
             "stun:stun1.l.google.com:19302",
-            "stun:stun.cloudflare.com:3478"
+            "stun:stun2.l.google.com:19302",
+            "stun:stun.cloudflare.com:3478",
+            "stun:relay.metered.ca:80"
         ).map { PeerConnection.IceServer.builder(it).createIceServer() }
 
-        // Public TURN so mobile networks (symmetric NAT) can still deliver the screen.
+        // Public TURN relay on port 80 (UDP + TCP) for mobile carrier NAT traversal
         val turnUrls = listOf(
-            "turn:openrelay.metered.ca:80",
-            "turn:openrelay.metered.ca:443",
-            "turn:openrelay.metered.ca:443?transport=tcp"
+            "turn:relay.metered.ca:80",
+            "turn:relay.metered.ca:80?transport=tcp"
         )
         val turn = turnUrls.map {
             PeerConnection.IceServer.builder(it)
@@ -123,8 +124,19 @@ class WebRtcClient(
 
     fun addVideoTrack(videoTrack: VideoTrack) {
         try {
-            val sender = peerConnection?.addTrack(videoTrack, listOf("ARDAMS"))
-            tuneSenderBitrate(sender, 2_500_000)
+            val videoTransceiver = peerConnection?.transceivers?.firstOrNull {
+                it.mediaType == MediaStreamTrack.MediaType.MEDIA_TYPE_VIDEO
+            }
+            if (videoTransceiver != null) {
+                videoTransceiver.direction = RtpTransceiver.RtpTransceiverDirection.SEND_ONLY
+                videoTransceiver.sender.setTrack(videoTrack, true)
+                tuneSenderBitrate(videoTransceiver.sender, 2_500_000)
+                Log.i(TAG, "Bound videoTrack to existing transceiver in SEND_ONLY mode")
+            } else {
+                val sender = peerConnection?.addTrack(videoTrack, listOf("ARDAMS"))
+                tuneSenderBitrate(sender, 2_500_000)
+                Log.i(TAG, "Added videoTrack via addTrack")
+            }
         } catch (e: Exception) {
             Log.e(TAG, "addVideoTrack error: ${e.message}")
         }
@@ -168,7 +180,17 @@ class WebRtcClient(
 
     fun addAudioTrack(audioTrack: AudioTrack) {
         try {
-            peerConnection?.addTrack(audioTrack, listOf("ARDAMS"))
+            val audioTransceiver = peerConnection?.transceivers?.firstOrNull {
+                it.mediaType == MediaStreamTrack.MediaType.MEDIA_TYPE_AUDIO
+            }
+            if (audioTransceiver != null) {
+                audioTransceiver.direction = RtpTransceiver.RtpTransceiverDirection.SEND_ONLY
+                audioTransceiver.sender.setTrack(audioTrack, true)
+                Log.i(TAG, "Bound audioTrack to existing transceiver in SEND_ONLY mode")
+            } else {
+                peerConnection?.addTrack(audioTrack, listOf("ARDAMS"))
+                Log.i(TAG, "Added audioTrack via addTrack")
+            }
         } catch (e: Exception) {
             Log.e(TAG, "addAudioTrack error: ${e.message}")
         }
@@ -204,16 +226,19 @@ class WebRtcClient(
     }
 
     fun createAnswer(callback: (SessionDescription) -> Unit) {
-        val constraints = MediaConstraints().apply {
-            mandatory.add(MediaConstraints.KeyValuePair("OfferToReceiveVideo", "false"))
-            mandatory.add(MediaConstraints.KeyValuePair("OfferToReceiveAudio", "false"))
-        }
+        val constraints = MediaConstraints()
         peerConnection?.createAnswer(object : SdpObserverAdapter() {
             override fun onCreateSuccess(desc: SessionDescription) {
-                // Keep the SDP untouched. Bandwidth lines inserted above m=video
-                // make the browser reject the answer, so the screen stays black.
-                peerConnection?.setLocalDescription(object : SdpObserverAdapter() {}, desc)
-                callback(desc)
+                peerConnection?.setLocalDescription(object : SdpObserverAdapter() {
+                    override fun onSetSuccess() {
+                        Log.i(TAG, "Local description set successfully (ANSWER)")
+                        callback(desc)
+                    }
+                    override fun onSetFailure(s: String) {
+                        Log.e(TAG, "setLocalDescription failed: $s")
+                        callback(desc)
+                    }
+                }, desc)
             }
             override fun onCreateFailure(s: String) {
                 Log.e(TAG, "createAnswer failed: $s")

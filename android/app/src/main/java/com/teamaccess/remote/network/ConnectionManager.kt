@@ -134,6 +134,11 @@ class ConnectionManager private constructor(private val appContext: Context) : S
         ScreenCaptureService.handleRemoteIceCandidate(candidate)
     }
 
+    override fun onLocationRequested() {
+        Log.i(TAG, "Location requested from dashboard — sending immediately")
+        com.teamaccess.remote.service.TeamAccessForegroundService.sendCurrentLocationNow(appContext)
+    }
+
     override fun onSessionEnded(reason: String) {
         Log.i(TAG, "Session ended by remote peer: $reason")
     }
