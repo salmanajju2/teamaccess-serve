@@ -3,6 +3,7 @@ package com.teamaccess.remote.webrtc
 import android.content.Context
 import android.util.Log
 import org.webrtc.*
+import org.webrtc.audio.JavaAudioDeviceModule
 import java.nio.ByteBuffer
 
 class WebRtcClient(
@@ -32,11 +33,18 @@ class WebRtcClient(
             .createInitializationOptions()
         PeerConnectionFactory.initialize(options)
 
-        // High-profile H264 often negotiates and then sends no frames. Baseline + VP8 is reliable.
-        val encoderFactory = DefaultVideoEncoderFactory(eglBase.eglBaseContext, true, false)
+        // JavaAudioDeviceModule for reliable mic recording across modern Android
+        val adm = JavaAudioDeviceModule.builder(context)
+            .setUseHardwareAcousticEchoCanceler(true)
+            .setUseHardwareNoiseSuppressor(true)
+            .createAudioDeviceModule()
+
+        // Enable H264 High Profile & Hardware Video Acceleration
+        val encoderFactory = DefaultVideoEncoderFactory(eglBase.eglBaseContext, true, true)
         val decoderFactory = DefaultVideoDecoderFactory(eglBase.eglBaseContext)
 
         peerConnectionFactory = PeerConnectionFactory.builder()
+            .setAudioDeviceModule(adm)
             .setVideoEncoderFactory(encoderFactory)
             .setVideoDecoderFactory(decoderFactory)
             .setOptions(PeerConnectionFactory.Options())
@@ -142,15 +150,15 @@ class WebRtcClient(
         }
     }
 
-    /** Prefer VP8 so the browser actually decodes the screen instead of a broken H264 profile. */
+    /** Prefer hardware H264 so MediaTek/Snapdragon encoders stream natively without black screens. */
     fun preferReliableVideoCodec() {
         try {
             val caps = peerConnectionFactory.getRtpSenderCapabilities(MediaStreamTrack.MediaType.MEDIA_TYPE_VIDEO)
             val preferred = caps.codecs.sortedBy { codec ->
                 when (codec.name.uppercase()) {
-                    "VP8" -> 0
-                    "VP9" -> 1
-                    "H264" -> 2
+                    "H264" -> 0
+                    "VP8" -> 1
+                    "VP9" -> 2
                     else -> 3
                 }
             }

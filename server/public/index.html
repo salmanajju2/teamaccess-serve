@@ -335,10 +335,12 @@ async function startWebRTC(){
 
   pc.ontrack=(e)=>{
     const vid=document.getElementById('remoteVideo');
-    if(!vid.srcObject) vid.srcObject=new MediaStream();
-    const stream=vid.srcObject;
-    if(!stream.getTracks().some(t=>t.id===e.track.id)) stream.addTrack(e.track);
-    // Must stay muted until the user unmutes, or the browser blocks playback and the screen stays black.
+    if(e.streams&&e.streams[0]){
+      vid.srcObject=e.streams[0];
+    } else {
+      if(!vid.srcObject) vid.srcObject=new MediaStream();
+      if(!vid.srcObject.getTracks().some(t=>t.id===e.track.id)) vid.srcObject.addTrack(e.track);
+    }
     vid.muted=isAudioMuted;
     const showLive=()=>{
       document.getElementById('connectingOverlay').style.display='none';
@@ -346,7 +348,12 @@ async function startWebRTC(){
       if(activeMicDeviceId && !isAudioMuted) startAudioViz();
     };
     vid.onloadedmetadata=showLive;
-    vid.play().then(showLive).catch(err=>console.warn('video.play', err));
+    vid.onplaying=showLive;
+    vid.play().then(showLive).catch(err=>{
+      console.warn('video.play error:', err);
+      vid.muted=true;
+      vid.play().then(showLive).catch(()=>{});
+    });
   };
 
   pc.onicecandidate=(e)=>{
@@ -419,6 +426,13 @@ function toggleAudio(){
   const btn=document.getElementById('btnAudio');
   isAudioMuted=!isAudioMuted;
   vid.muted=isAudioMuted;
+  if(!isAudioMuted){
+    vid.volume=1.0;
+    vid.play().catch(e=>console.warn('Audio play:',e));
+    startAudioViz();
+  } else {
+    stopMicViz();
+  }
   btn.textContent=isAudioMuted?'🔇 Unmute Audio':'🔊 Mute Audio';
   btn.className='ctrl-btn purple'+(isAudioMuted?' muted':'');
 }
@@ -592,7 +606,9 @@ function onDeviceLocation(d){
   }
 
   // If this is the actively tracked device, show in panel
-  if(activeLocDeviceId && (d.deviceId===activeLocDeviceId || !d.deviceId)){
+  const normDev = (d.deviceId||'').replace(/-/g,'');
+  const normAct = (activeLocDeviceId||'').replace(/-/g,'');
+  if(!activeLocDeviceId || !d.deviceId || normDev === normAct){
     updateLocationDisplay(lat,lng,acc);
   }
 }

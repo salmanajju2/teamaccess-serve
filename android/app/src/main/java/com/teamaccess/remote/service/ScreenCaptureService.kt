@@ -229,8 +229,8 @@ class ScreenCaptureService : Service(), WebRtcClient.WebRtcListener {
             val screenH = metrics.heightPixels.coerceAtLeast(1)
             var captureWidth = 720
             var captureHeight = (720f * screenH / screenW).toInt().coerceIn(2, 1920)
-            if (captureWidth % 2 != 0) captureWidth += 1
-            if (captureHeight % 2 != 0) captureHeight += 1
+            if (captureWidth % 16 != 0) captureWidth = ((captureWidth + 15) / 16) * 16
+            if (captureHeight % 16 != 0) captureHeight = ((captureHeight + 15) / 16) * 16
             val fps = 30
 
             videoCapturer = ScreenCapturerAndroid(resultData, object : MediaProjection.Callback() {
