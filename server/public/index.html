@@ -114,7 +114,7 @@ video#remoteVideo{max-width:100%;max-height:72vh;object-fit:contain;cursor:cross
         <div class="spinner"></div>
         <div class="connecting-txt" id="connectingMsg">Connecting to device…<br><small style="color:#475569;font-size:11px">Make sure screen share is active on phone</small></div>
       </div>
-      <video id="remoteVideo" autoplay playsinline></video>
+      <video id="remoteVideo" autoplay playsinline muted></video>
     </div>
     <div class="viewer-controls">
       <button class="ctrl-btn" onclick="sendNav('back')">◀ Back</button>
@@ -122,6 +122,7 @@ video#remoteVideo{max-width:100%;max-height:72vh;object-fit:contain;cursor:cross
       <button class="ctrl-btn" onclick="sendNav('recents')">📑 Recents</button>
       <button class="ctrl-btn purple" id="btnAudio" onclick="toggleAudio()">🔇 Unmute Audio</button>
       <button class="ctrl-btn" id="btnFullscreen" onclick="toggleFullscreen()">⛶ Fullscreen</button>
+      <button class="ctrl-btn" id="btnRecord" onclick="toggleRecording()">🔴 Record</button>
       <button class="ctrl-btn danger" onclick="disconnectSession()">⏹ End Session</button>
     </div>
   </div>
@@ -184,10 +185,10 @@ const WS_URL = (location.protocol==='https:'?'wss://':'ws://')+location.host+'/w
 const ICE = {iceServers:[
   {urls:'stun:stun.l.google.com:19302'},
   {urls:'stun:stun1.l.google.com:19302'},
-  {urls:'stun:stun2.l.google.com:19302'},
-  {urls:'stun:stun3.l.google.com:19302'},
-  {urls:'stun:stun4.l.google.com:19302'},
-  {urls:'stun:stun.cloudflare.com:3478'}
+  {urls:'stun:stun.cloudflare.com:3478'},
+  {urls:'turn:openrelay.metered.ca:80', username:'openrelayproject', credential:'openrelayproject'},
+  {urls:'turn:openrelay.metered.ca:443', username:'openrelayproject', credential:'openrelayproject'},
+  {urls:'turn:openrelay.metered.ca:443?transport=tcp', username:'openrelayproject', credential:'openrelayproject'}
 ]};
 
 // ═══════════ STATE ═══════════
@@ -206,7 +207,12 @@ let deviceLocations={};
 function connectWS(){
   ws=new WebSocket(WS_URL);
   ws.binaryType='arraybuffer';
-  ws.onopen=()=>{ setBadge(true); wsSend({type:'get_devices'}); };
+  ws.onopen=()=>{
+    setBadge(true);
+    // Register so GPS updates can be delivered before a screen session starts.
+    wsSend({type:'register', deviceName:'Web Controller', isHost:false});
+    wsSend({type:'get_devices'});
+  };
   ws.onmessage=async(ev)=>{
     try{
       const d=JSON.parse(ev.data);
@@ -314,27 +320,24 @@ function setStatus(txt){
 async function startWebRTC(){
   isRemoteDescSet=false; pendingCandidates=[];
   if(pc){try{pc.close();}catch(e){}}
+  const oldVid=document.getElementById('remoteVideo');
+  oldVid.srcObject=null;
   pc=new RTCPeerConnection(ICE);
 
   pc.ontrack=(e)=>{
     const vid=document.getElementById('remoteVideo');
-    if(e.track.kind==='video'){
-      if(!vid.srcObject) vid.srcObject=new MediaStream();
-      vid.srcObject.addTrack(e.track);
-      vid.onloadedmetadata=()=>{
-        document.getElementById('connectingOverlay').style.display='none';
-        setStatus('Live Stream Active ✓');
-        // Start audio visualizer if mic is requested
-        if(activeMicDeviceId) startAudioViz();
-      };
-    }
-    if(e.track.kind==='audio'){
-      if(!vid.srcObject) vid.srcObject=new MediaStream();
-      vid.srcObject.addTrack(e.track);
-      vid.muted=isAudioMuted; // keep muted until user enables
-      // Setup audio visualizer for mic panel
-      if(activeMicDeviceId) startAudioViz();
-    }
+    if(!vid.srcObject) vid.srcObject=new MediaStream();
+    const stream=vid.srcObject;
+    if(!stream.getTracks().some(t=>t.id===e.track.id)) stream.addTrack(e.track);
+    // Must stay muted until the user unmutes, or the browser blocks playback and the screen stays black.
+    vid.muted=isAudioMuted;
+    const showLive=()=>{
+      document.getElementById('connectingOverlay').style.display='none';
+      setStatus('Live Stream Active ✓');
+      if(activeMicDeviceId && !isAudioMuted) startAudioViz();
+    };
+    vid.onloadedmetadata=showLive;
+    vid.play().then(showLive).catch(err=>console.warn('video.play', err));
   };
 
   pc.onicecandidate=(e)=>{
@@ -343,15 +346,30 @@ async function startWebRTC(){
     }});
   };
 
+  const markLive=()=>{
+    document.getElementById('connectingOverlay').style.display='none';
+    setStatus('Live Stream Active ✓');
+    const vid=document.getElementById('remoteVideo');
+    vid.play().catch(()=>{});
+  };
   pc.onconnectionstatechange=()=>{
     const s=pc.connectionState;
-    if(s==='connected'){
-      document.getElementById('connectingOverlay').style.display='none';
-      setStatus('Live Stream Active ✓');
-    } else if(s==='failed'||s==='disconnected'){
-      setStatus('Reconnecting…');
+    if(s==='connected') markLive();
+    else if(s==='failed'){
+      setStatus('Connection failed');
       document.getElementById('connectingOverlay').style.display='flex';
-      document.getElementById('connectingMsg').textContent='Reconnecting…';
+      document.getElementById('connectingMsg').textContent='Connection failed. Tap connect again.';
+    } else if(s==='disconnected'){
+      setStatus('Reconnecting…');
+    }
+  };
+  pc.oniceconnectionstatechange=()=>{
+    const s=pc.iceConnectionState;
+    if(s==='connected'||s==='completed') markLive();
+    else if(s==='failed'){
+      setStatus('Network blocked the stream');
+      document.getElementById('connectingOverlay').style.display='flex';
+      document.getElementById('connectingMsg').textContent='Could not open a path to the phone. Try again on Wi-Fi.';
     }
   };
 
@@ -428,9 +446,8 @@ vid.addEventListener('wheel',e=>{
   sendTouch(0,x,y);setTimeout(()=>sendTouch(2,x,Math.max(0,Math.min(1,y+dy))),30);setTimeout(()=>sendTouch(1,x,Math.max(0,Math.min(1,y+dy))),100);
 },{passive:false});
 function sendNav(type){
-  const map={back:[1,4],home:[2,3],recents:[3,187]};
-  const[k1,k2]=map[type]||[0,0];
-  sendTouch(4,0,0,k1);setTimeout(()=>sendTouch(4,0,0,k2),30);
+  const map={back:4, home:3, recents:187};
+  sendTouch(4,0,0,map[type]||0);
 }
 
 // ═══════════ DISCONNECT ═══════════
@@ -608,6 +625,38 @@ function stopLocation(){
 // ═══════════ AUTO-REFRESH ═══════════
 setInterval(refreshDevices,4000);
 connectWS();
+
+// ═══════════ SCREEN RECORDING ═══════════
+let mediaRecorder=null, recordedChunks=[];
+function toggleRecording(){
+  const btn=document.getElementById('btnRecord');
+  if(mediaRecorder&&mediaRecorder.state==='recording'){
+    mediaRecorder.stop();
+    btn.textContent='🔴 Record';
+    btn.classList.remove('danger');
+    return;
+  }
+  const vid=document.getElementById('remoteVideo');
+  if(!vid.srcObject){alert('Pehle device se connect karo!');return;}
+  recordedChunks=[];
+  const mimeType=MediaRecorder.isTypeSupported('video/webm;codecs=vp9')?'video/webm;codecs=vp9':'video/webm';
+  mediaRecorder=new MediaRecorder(vid.srcObject,{mimeType});
+  mediaRecorder.ondataavailable=e=>{if(e.data&&e.data.size>0)recordedChunks.push(e.data);};
+  mediaRecorder.onstop=()=>{
+    const blob=new Blob(recordedChunks,{type:'video/webm'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;
+    a.download='TeamAccess-Recording-'+new Date().toISOString().replace(/[:.]/g,'-')+'.webm';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(()=>{URL.revokeObjectURL(url);document.body.removeChild(a);},2000);
+    recordedChunks=[];
+  };
+  mediaRecorder.start(1000);
+  btn.textContent='⏹ Stop & Save';
+  btn.classList.add('danger');
+}
 </script>
 </body>
 </html>

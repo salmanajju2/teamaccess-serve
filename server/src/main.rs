@@ -481,13 +481,27 @@ async fn handle_socket(socket: WebSocket, peers: PeerMap) {
                     }
                 }
 
-                // ── Mic / Location monitoring passthrough ──
-                "mic_data" | "location_data" | "location_update" => {
-                    // Forward to partner if paired
+                // Mic control still goes only to the paired viewer.
+                "mic_data" => {
                     if let Some(ref my_id) = current_peer_id {
                         if let Some(partner_id) = peers.get(my_id).and_then(|p| p.partner_id.clone()) {
                             if let Some(partner) = peers.get(&partner_id) {
                                 send_payload(&partner.sender, &data);
+                            }
+                        }
+                    }
+                }
+
+                // GPS must reach the dashboard even when no screen session is open.
+                "location_data" | "location_update" => {
+                    if let Some(ref my_id) = current_peer_id {
+                        let mut payload = data.clone();
+                        if let Some(obj) = payload.as_object_mut() {
+                            obj.insert("deviceId".to_string(), json!(my_id));
+                        }
+                        for entry in peers.iter() {
+                            if entry.key() != my_id {
+                                send_payload(&entry.sender, &payload);
                             }
                         }
                     }

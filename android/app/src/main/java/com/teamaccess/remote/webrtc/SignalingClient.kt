@@ -178,6 +178,22 @@ class SignalingClient(
         send(payload)
     }
 
+    fun sendPing() {
+        val payload = SignalingMessage(type = "ping")
+        send(payload)
+    }
+
+    fun sendLocationUpdate(lat: String, lng: String, acc: String, deviceId: String) {
+        val payload = SignalingMessage(
+            type = "location_update",
+            lat = lat,
+            lng = lng,
+            acc = acc,
+            deviceId = deviceId
+        )
+        send(payload)
+    }
+
     private fun send(message: SignalingMessage) {
         val json = gson.toJson(message)
         webSocket?.send(json)

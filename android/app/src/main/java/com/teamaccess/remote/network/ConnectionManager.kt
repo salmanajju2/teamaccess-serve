@@ -125,7 +125,7 @@ class ConnectionManager private constructor(private val appContext: Context) : S
 
     override fun onOfferReceived(sdp: String) {
         Log.i(TAG, "WebRTC offer received — forwarding to ScreenCaptureService")
-        ScreenCaptureService.handleOffer(sdp) { answerSdp ->
+        ScreenCaptureService.handleOffer(appContext, sdp) { answerSdp ->
             signalingClient.sendAnswer(answerSdp)
         }
     }

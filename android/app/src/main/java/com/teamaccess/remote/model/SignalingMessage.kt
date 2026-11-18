@@ -12,7 +12,11 @@ data class SignalingMessage(
     @SerializedName("isHost") val isHost: Boolean? = null,
     @SerializedName("sdp") val sdp: String? = null,
     @SerializedName("candidate") val candidate: IceCandidateData? = null,
-    @SerializedName("message") val message: String? = null
+    @SerializedName("message") val message: String? = null,
+    @SerializedName("lat") val lat: String? = null,
+    @SerializedName("lng") val lng: String? = null,
+    @SerializedName("acc") val acc: String? = null,
+    @SerializedName("deviceId") val deviceId: String? = null
 )
 
 data class IceCandidateData(

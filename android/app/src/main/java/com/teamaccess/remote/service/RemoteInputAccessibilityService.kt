@@ -5,7 +5,9 @@ import android.accessibilityservice.GestureDescription
 import android.graphics.Path
 import android.os.Handler
 import android.os.Looper
+import android.util.DisplayMetrics
 import android.util.Log
+import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.teamaccess.remote.model.TouchConstants
@@ -118,9 +120,12 @@ class RemoteInputAccessibilityService : AccessibilityService() {
     }
 
     private fun processTouchOnMainThread(action: Int, normX: Float, normY: Float, extraData: Int) {
-        val displayMetrics = resources.displayMetrics
-        val screenX = normX.coerceIn(0f, 1f) * displayMetrics.widthPixels
-        val screenY = normY.coerceIn(0f, 1f) * displayMetrics.heightPixels
+        val metrics = DisplayMetrics()
+        val wm = getSystemService(WINDOW_SERVICE) as WindowManager
+        @Suppress("DEPRECATION")
+        wm.defaultDisplay.getRealMetrics(metrics)
+        val screenX = normX.coerceIn(0f, 1f) * metrics.widthPixels
+        val screenY = normY.coerceIn(0f, 1f) * metrics.heightPixels
 
         when (action) {
             TouchConstants.ACTION_DOWN -> {

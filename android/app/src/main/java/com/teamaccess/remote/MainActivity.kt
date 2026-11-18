@@ -19,6 +19,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
 import com.google.android.material.button.MaterialButton
 import com.teamaccess.remote.databinding.ActivityMainBinding
 import com.teamaccess.remote.network.ConnectionManager
@@ -50,6 +51,7 @@ class MainActivity : AppCompatActivity(), SignalingClient.SignalingCallback {
                 startService(serviceIntent)
             }
             updateUiState()
+            Toast.makeText(this, "Screen sharing started", Toast.LENGTH_SHORT).show()
         } else {
             Toast.makeText(this, "Screen share permission denied. Please allow it.", Toast.LENGTH_LONG).show()
         }
@@ -65,6 +67,7 @@ class MainActivity : AppCompatActivity(), SignalingClient.SignalingCallback {
         } else {
             Toast.makeText(this, "Some permissions denied — mic/location may not work", Toast.LENGTH_LONG).show()
         }
+        TeamAccessForegroundService.refreshLocation(this)
         updateUiState()
     }
 
@@ -87,6 +90,20 @@ class MainActivity : AppCompatActivity(), SignalingClient.SignalingCallback {
 
         setupButtons()
         requestAllPermissions()
+        handleAutoStart(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleAutoStart(intent)
+    }
+
+    private fun handleAutoStart(intent: Intent?) {
+        if (intent?.getBooleanExtra("AUTO_START_SHARE", false) != true) return
+        if (!PermissionHelper.isDisclosureAccepted(this)) return
+        if (ScreenCaptureService.isRunning) return
+        window.decorView.post { startScreenShareFlow() }
     }
 
     override fun onResume() {
@@ -149,11 +166,8 @@ class MainActivity : AppCompatActivity(), SignalingClient.SignalingCallback {
     }
 
     private fun startScreenShareFlow() {
-        // Check accessibility first
         if (RemoteInputAccessibilityService.instance == null) {
-            Toast.makeText(this, "Please enable Accessibility permission first!", Toast.LENGTH_LONG).show()
-            PermissionHelper.openAccessibilitySettings(this)
-            return
+            Toast.makeText(this, "Screen will share. Enable Accessibility if you also want remote tap.", Toast.LENGTH_LONG).show()
         }
         val mediaProjectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         mediaProjectionLauncher.launch(mediaProjectionManager.createScreenCaptureIntent())
@@ -292,10 +306,14 @@ class MainActivity : AppCompatActivity(), SignalingClient.SignalingCallback {
 
     override fun onIncomingConnection(fromId: String) {
         runOnUiThread {
-            Toast.makeText(this, "Remote session incoming!", Toast.LENGTH_SHORT).show()
-            if (!ScreenCaptureService.isRunning) {
+            Toast.makeText(this, "Remote session incoming. Allow screen share if it is not already on.", Toast.LENGTH_LONG).show()
+            if (!ScreenCaptureService.isRunning
+                && PermissionHelper.isDisclosureAccepted(this)
+                && lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
+            ) {
                 startScreenShareFlow()
             }
+            updateUiState()
         }
     }
 
